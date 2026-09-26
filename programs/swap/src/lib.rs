@@ -3,12 +3,12 @@ use anchor_spl::{
     associated_token::AssociatedToken,
     token_interface::{Mint, TokenAccount, TokenInterface},
 };
+use anchor_spl::{token_2022::TransferChecked, token_interface};
 
 declare_id!("81TraMMrLeWqbk6Vz5WyRP3R1JcVJ3bzKoiKWcwnXtgE");
 
 #[program]
 pub mod swap {
-    use anchor_spl::{token_2022::TransferChecked, token_interface};
 
     use super::*;
 
@@ -41,7 +41,31 @@ pub mod swap {
         Ok(())
     }
 
-    pub fn swap_a_b(ctx: Context<SwapAB>, amount: u64) -> Result<()> {
+    pub fn swap_a_b(ctx: Context<SwapAB>, amount_in: u64, min_amount_out: u64) -> Result<()> {
+        let reserve_a = ctx.accounts.token_a_vault.amount;
+        let reserve_b = ctx.accounts.token_b_vault.amount;
+        // amout_out = res_a * am_in / res-b + am_in
+
+        require!(reserve_a > 0, SwapError::InvalidAmount);
+        require!(reserve_b > 0, SwapError::InvalidAmount);
+        require!(amount_in > 0, SwapError::InvalidAmount);
+
+        let amount_out = (reserve_a as u128)
+            .checked_mul(amount_in as u128)
+            .ok_or(SwapError::MathOverflow)?
+            .checked_div(
+                (reserve_b as u128)
+                    .checked_add(amount_in as u128)
+                    .ok_or(SwapError::MathOverflow)?,
+            )
+            .ok_or(SwapError::MathOverflow)?;
+
+        let amount_out = amount_out as u64;
+
+        require!(amount_out >= min_amount_out, SwapError::SlippageExceeded);
+
+        require!(amount_out < reserve_b, SwapError::InsufficientLiquidity);
+
         let ctx_account = TransferChecked {
             from: ctx.accounts.user_a_ata.to_account_info(),
             to: ctx.accounts.token_a_vault.to_account_info(),
@@ -51,7 +75,7 @@ pub mod swap {
 
         let cpi_ixn = CpiContext::new(ctx.accounts.token_program.key(), ctx_account);
 
-        token_interface::transfer_checked(cpi_ixn, amount, ctx.accounts.token_a_mint.decimals)?;
+        token_interface::transfer_checked(cpi_ixn, amount_in, ctx.accounts.token_a_mint.decimals)?;
 
         let ctx_account = TransferChecked {
             from: ctx.accounts.token_b_vault.to_account_info(),
@@ -59,6 +83,7 @@ pub mod swap {
             mint: ctx.accounts.token_b_mint.to_account_info(),
             authority: ctx.accounts.token_b_vault.to_account_info(),
         };
+
         let token_b_mint = ctx.accounts.token_b_mint.key();
 
         let signer_seeds: &[&[&[u8]]] = &[&[
@@ -70,7 +95,7 @@ pub mod swap {
         let cpi_ixn = CpiContext::new(ctx.accounts.token_program.key(), ctx_account)
             .with_signer(signer_seeds);
 
-        token_interface::transfer_checked(cpi_ixn, amount, ctx.accounts.token_b_mint.decimals)?;
+        token_interface::transfer_checked(cpi_ixn, amount_out, ctx.accounts.token_b_mint.decimals)?;
 
         Ok(())
     }
@@ -121,6 +146,7 @@ pub struct AddLiquidity<'info> {
         mut,
         token::mint = token_a_mint,
         token::authority = token_a_vault,
+        // token::state= TokenAccount
         seeds = [b"samad-dex-vault",token_a_mint.key().as_ref()],
         bump
     )]
@@ -190,4 +216,22 @@ pub struct SwapAB<'info> {
     pub token_program: Interface<'info, TokenInterface>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
+}
+
+#[error_code]
+pub enum SwapError {
+    #[msg("Pool has not liquidity.")]
+    EmptyPool,
+
+    #[msg("Amount must be greater than zero.")]
+    InvalidAmount,
+
+    #[msg("Math overflow")]
+    MathOverflow,
+
+    #[msg("Insufficient Liquidity.")]
+    InsufficientLiquidity,
+
+    #[msg("Slippage tolerance exceeded.")]
+    SlippageExceeded,
 }
