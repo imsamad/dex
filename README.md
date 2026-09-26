@@ -122,7 +122,7 @@ it works with both the classic SPL Token program and Token-2022.
 
 ### Contract to-do list
 
-- [ ] **Fix the swap formula:** `swap_a_b` uses `reserve_a * in / (reserve_b + in)`. For
+- [x] **Fix the swap formula:** `swap_a_b` uses `reserve_a * in / (reserve_b + in)`. For
       A → B it should be `reserve_b * in / (reserve_a + in)` (output reserve on top, input
       reserve on the bottom). The current version only looks right when both reserves are equal.
 - [ ] **Pool account:** vaults are seeded by one mint only (`["samad-dex-vault", mint]`), so

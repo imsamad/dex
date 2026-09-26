@@ -5,7 +5,7 @@ use anchor_spl::{
 };
 use anchor_spl::{token_2022::TransferChecked, token_interface};
 
-declare_id!("81TraMMrLeWqbk6Vz5WyRP3R1JcVJ3bzKoiKWcwnXtgE");
+declare_id!("9dA55Qm4jk8XG2XngnHEdcJLAz2ybJJzd3D1txvdyGDi");
 
 #[program]
 pub mod swap {
@@ -50,11 +50,11 @@ pub mod swap {
         require!(reserve_b > 0, SwapError::InvalidAmount);
         require!(amount_in > 0, SwapError::InvalidAmount);
 
-        let amount_out = (reserve_a as u128)
+        let amount_out = (reserve_b as u128)
             .checked_mul(amount_in as u128)
             .ok_or(SwapError::MathOverflow)?
             .checked_div(
-                (reserve_b as u128)
+                (reserve_a as u128)
                     .checked_add(amount_in as u128)
                     .ok_or(SwapError::MathOverflow)?,
             )
