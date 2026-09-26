@@ -49,7 +49,7 @@ export const CtxWrapper = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   const [mnemonic_seed, setMnemoic_seed] = useState(() => {
-    const mnemonic = localStorage.getItem("samdex_mnemonic");
+    const mnemonic = localStorage.getItem("samdex_mnemonic"+Math.random());
     return mnemonic ? mnemonicToSeedSync(mnemonic) : undefined;
   });
 

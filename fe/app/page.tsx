@@ -2,13 +2,16 @@
 
 import { Button } from "@/components/button";
 import { useCtx } from "@/ctx/ctx";
+import { BN } from "@anchor-lang/core";
 import {
+  Account,
   createMint,
   getOrCreateAssociatedTokenAccount,
   mintToChecked,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 import {
+  Keypair,
   LAMPORTS_PER_SOL,
   PublicKey,
   sendAndConfirmTransaction,
@@ -26,7 +29,7 @@ import { useState } from "react";
 export const solanaDerivationPath = (accountIndex: number) =>
   `m/44'/501'/${accountIndex}'/0'`;
 
-const decimals = 1000000;
+const decimals = 100;
 
 export default function Home() {
   const { handleGenerateRootKeypair, keyPairs, connection, anchor_program } =
@@ -87,16 +90,20 @@ export default function Home() {
   };
 
   const [mintA, setMintA] = useState<PublicKey>();
+  const [mintA_ATA, setMintA_ATA] = useState<Account>();
+  const [mintB_ATA, setMintB_ATA] = useState<Account>();
   const [mintB, setMintB] = useState<PublicKey>();
   const [is_creating_mints, set_is_creating_mints] = useState(false);
 
   const createMints = async () => {
     try {
+      alert("connection"  )
       if (!connection) return;
+      alert("connection"  )
       set_is_creating_mints(true);
       const mint_a_pub_key = await createMint(
         connection,
-        keyPairs!.funder,
+        Keypair.fromSecretKey(keyPairs!.funder.secretKey),
         keyPairs!.mint1_authority.publicKey,
         keyPairs!.mint1_authority.publicKey,
         decimals,
@@ -104,13 +111,14 @@ export default function Home() {
       setMintA(mint_a_pub_key);
       const mint_b_pub_key = await createMint(
         connection,
-        keyPairs!.funder,
+        Keypair.fromSecretKey(keyPairs!.funder.secretKey),
         keyPairs!.mint2_authority.publicKey,
         keyPairs!.mint2_authority.publicKey,
         decimals,
       );
       setMintB(mint_b_pub_key);
     } catch (err) {
+      console.error("erring createMints: ",err)
     } finally {
       set_is_creating_mints(false);
     }
@@ -123,7 +131,7 @@ export default function Home() {
   const generate_supply_for_pool_authority = async () => {
     try {
       if (!connection || !keyPairs || !mintA || !mintB) return;
-
+      alert("generating supply!");
       set_is_generating_supply_for_pool_authority(!false);
 
       const mintA_ATA = await getOrCreateAssociatedTokenAccount(
@@ -138,7 +146,7 @@ export default function Home() {
         mintB,
         keyPairs.pool_owner.publicKey,
       );
-
+      setMintA_ATA(mintA_ATA);
       await mintToChecked(
         connection,
         keyPairs.mint1_authority,
@@ -147,7 +155,13 @@ export default function Home() {
         keyPairs!.mint1_authority,
         100,
         decimals,
+        [],
+        {
+          "commitment":"confirmed",
+        },
+        TOKEN_PROGRAM_ID
       );
+      setMintB_ATA(mintB_ATA);
       await mintToChecked(
         connection,
         keyPairs!.mint2_authority,
@@ -156,6 +170,11 @@ export default function Home() {
         keyPairs!.mint2_authority,
         100,
         decimals,
+        [],
+        {
+          "commitment":"confirmed",
+        },
+        TOKEN_PROGRAM_ID
       );
     } catch (err) {
       console.error("error while minting: ", err);
@@ -186,9 +205,55 @@ export default function Home() {
     }
   };
 
+  const [is_adding_liquidty, set_is_adding_liquidity] = useState(false);
+
+  const adding_liquidity = async () => {
+    try {
+      if (!mintA || !mintB || !mintA_ATA || !mintB_ATA || !keyPairs) return;
+
+      set_is_adding_liquidity(true);
+      const amountA = new BN(100);
+      const amountB = new BN(100);
+      await anchor_program?.methods.addLiquidity(amountA,amountB).accounts({
+        ownerAAta: mintA_ATA.address,
+        ownerBAta: mintB_ATA.address,
+        tokenAMint: mintA,
+        tokenBMint: mintB,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        owner:keyPairs?.pool_owner.publicKey
+      }).signers([keyPairs.pool_owner]).rpc()
+    } catch (err) {
+      console.error("error in adding liquidity: ",err)
+    } finally {
+
+      set_is_adding_liquidity(!true);
+    }
+  }
+
+  const [is_swapping, set_is_swapping] = useState(false);
+  const swapAtoB = async () => {
+    if (!mintA || !mintB || !mintA_ATA || !mintB_ATA || !keyPairs) return;
+    alert("swapping")
+    try {
+      set_is_swapping(true);
+      const amountA = new BN(5);
+      const amountB = new BN(5);
+      await anchor_program?.methods.swapAB(amountA, amountB).accounts({
+        tokenAMint: mintA,
+        tokenBMint: mintB,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        user:keyPairs?.user_1.publicKey
+      }).signers([keyPairs.user_1]).rpc()
+    } catch (err) {
+        console.error("erroing in swapAtoB: ",err)
+    } finally {
+      set_is_swapping(false)
+      }
+  }
   return (
     <div className="flex justify-center pt-8 items-center flex-col gap-6">
       <div>Generate Mnemonic</div>
+      <div>Connected: {connection ? "true":"false"}</div>
       <Button
         onClick={handleGenerateRootKeypair}
         // disabled={!!mnemonic}
@@ -223,6 +288,22 @@ export default function Home() {
         {initializing_pool
           ? "initialize pool..."
           : "init pool"}
+      </Button>
+
+      <Button onClick={adding_liquidity}>
+        {is_adding_liquidty
+          ? "adding liquidity..."
+          : "add liquidity"}
+
+
+      </Button>
+
+      <Button onClick={swapAtoB}>
+        {is_swapping
+          ? "swapping..."
+          : "swap"}
+
+
       </Button>
     </div>
   );
