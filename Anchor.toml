@@ -6,7 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-swap = "E72behkd9BgWX8R18WJ3VMzo3TYegPqzoMZF4PCpwZQT"
+swap = "48hQo5DcqyZmTeVPpCHGwb6GAzxnSo1kTGnb6UE8ewAN"
 
 [provider]
 cluster = "localnet"

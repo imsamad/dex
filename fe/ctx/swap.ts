@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/swap.json`.
  */
 export type Swap = {
-  "address": "E72behkd9BgWX8R18WJ3VMzo3TYegPqzoMZF4PCpwZQT",
+  "address": "48hQo5DcqyZmTeVPpCHGwb6GAzxnSo1kTGnb6UE8ewAN",
   "metadata": {
     "name": "swap",
     "version": "0.1.0",

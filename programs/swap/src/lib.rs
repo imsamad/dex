@@ -5,7 +5,7 @@ use anchor_spl::{
 };
 use anchor_spl::{token_2022::TransferChecked, token_interface};
 
-declare_id!("E72behkd9BgWX8R18WJ3VMzo3TYegPqzoMZF4PCpwZQT");
+declare_id!("48hQo5DcqyZmTeVPpCHGwb6GAzxnSo1kTGnb6UE8ewAN");
 
 #[program]
 pub mod swap {
@@ -118,7 +118,7 @@ pub struct InitPool<'info> {
         seeds = [b"samad-dex-vault", token_a_mint.key().as_ref()],
         bump
     )]
-    pub token_a_vault: InterfaceAccount<'info, TokenAccount>,
+    pub token_a_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         init_if_needed,
@@ -129,7 +129,7 @@ pub struct InitPool<'info> {
         seeds = [b"samad-dex-vault",token_b_mint.key().as_ref()],
         bump
     )]
-    pub token_b_vault: InterfaceAccount<'info, TokenAccount>,
+    pub token_b_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     pub token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
@@ -150,7 +150,7 @@ pub struct AddLiquidity<'info> {
         seeds = [b"samad-dex-vault",token_a_mint.key().as_ref()],
         bump
     )]
-    pub token_a_vault: InterfaceAccount<'info, TokenAccount>,
+    pub token_a_vault: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(
         mut,
         token::mint = token_b_mint,
@@ -158,21 +158,21 @@ pub struct AddLiquidity<'info> {
         seeds = [b"samad-dex-vault",token_b_mint.key().as_ref()],
         bump
     )]
-    pub token_b_vault: InterfaceAccount<'info, TokenAccount>,
+    pub token_b_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
         token::authority = owner,
         token::mint = token_a_mint,
     )]
-    pub owner_a_ata: InterfaceAccount<'info, TokenAccount>,
+    pub owner_a_ata: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
         token::authority = owner,
         token::mint = token_b_mint,
     )]
-    pub owner_b_ata: InterfaceAccount<'info, TokenAccount>,
+    pub owner_b_ata: Box<InterfaceAccount<'info, TokenAccount>>,
 
     pub token_program: Interface<'info, TokenInterface>,
 }
@@ -189,14 +189,14 @@ pub struct SwapAB<'info> {
         associated_token::authority = user,
         associated_token::mint = token_a_mint,
     )]
-    pub user_a_ata: InterfaceAccount<'info, TokenAccount>,
+    pub user_a_ata: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(
         init_if_needed,
         payer = user,
         associated_token::authority = user,
         associated_token::mint = token_b_mint,
     )]
-    pub user_b_ata: InterfaceAccount<'info, TokenAccount>,
+    pub user_b_ata: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(
         mut,
         token::authority = token_a_vault,
@@ -204,7 +204,7 @@ pub struct SwapAB<'info> {
         seeds = [b"samad-dex-vault",token_a_mint.key().as_ref()],
         bump
     )]
-    pub token_a_vault: InterfaceAccount<'info, TokenAccount>,
+    pub token_a_vault: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(
         mut,
         token::authority = token_b_vault,
@@ -212,7 +212,7 @@ pub struct SwapAB<'info> {
         seeds = [b"samad-dex-vault",token_b_mint.key().as_ref()],
         bump
     )]
-    pub token_b_vault: InterfaceAccount<'info, TokenAccount>,
+    pub token_b_vault: Box<InterfaceAccount<'info, TokenAccount>>,
     pub token_program: Interface<'info, TokenInterface>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
