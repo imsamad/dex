@@ -1,6 +1,9 @@
 "use client";
 
 import { Button } from "@/components/button";
+import { GenerateKeypairs } from "@/components/generate-keypairs";
+import { GenerateMints } from "@/components/generate-mint";
+import { GenerateMnemonic } from "@/components/generate-mnemonic";
 import { useCtx } from "@/ctx/ctx";
 import { BN } from "@anchor-lang/core";
 import {
@@ -26,14 +29,16 @@ import { useState } from "react";
 // supply tokens into some two users token accounts
 // execute swap for them
 
-export const solanaDerivationPath = (accountIndex: number) =>
-  `m/44'/501'/${accountIndex}'/0'`;
-
 const decimals = 6;
 
 export default function Home() {
-  const { handleGenerateRootKeypair, keyPairs, connection, anchor_program } =
-    useCtx();
+  const {
+    mnemonic_seed_phrase,
+    handleGenerateRootKeypair,
+    keyPairs,
+    connection,
+    anchor_program,
+  } = useCtx();
   const [isAirdropping, setIsAirdropping] = useState(false);
 
   const [account_infos, set_account_infos] = useState<object>();
@@ -322,43 +327,58 @@ export default function Home() {
       set_is_swapping(false);
     }
   };
+  const { amm_state } = useCtx();
   return (
-    <div className="flex justify-center pt-8 items-center flex-col gap-6">
-      <div>Generate Mnemonic</div>
-      <div>Connected: {connection ? "true" : "false"}</div>
-      <Button
-        onClick={handleGenerateRootKeypair}
-        // disabled={!!mnemonic}
-      >
-        Lets do it!
-      </Button>
-      <Button onClick={airdropFunder}>
-        {isAirdropping ? "Airdropping Funder..." : "Airdrop Funder!"}
-      </Button>
-      <Button onClick={inspectBalances}>
-        {retriving_account_infos
-          ? "retriving_account_infos..."
-          : "retrive_account_infos! "}
-      </Button>
-      <pre>{JSON.stringify(account_infos, null, 2)}</pre>
-      <Button onClick={createMints}>
-        {is_creating_mints ? "creating mints..." : "createMints"}
-      </Button>
-      <Button onClick={generate_supply_for_pool_authority}>
-        {is_generating_supply_for_pool_authority
-          ? "generating supply for pool authority..."
-          : "generate supply!"}
-      </Button>
-      <Button onClick={init_pool}>
-        {initializing_pool ? "initialize pool..." : "init pool"}
-      </Button>
-      <Button onClick={adding_liquidity}>
-        {is_adding_liquidty ? "adding liquidity..." : "add liquidity"}
-      </Button>{" "}
-      <Button onClick={mint_for_users}>
-        {is_minting_for_users ? "mint users..." : "mint users"}
-      </Button>
-      <Button onClick={swapAtoB}>{is_swapping ? "swapping..." : "swap"}</Button>
+    <div className="flex flex-col gap-4">
+      <h1>
+        Is Connected with validator: {amm_state.connection ? "Yes" : "No"}
+      </h1>
+      <GenerateMnemonic />
+      <GenerateKeypairs />
+      <GenerateMints />
+
     </div>
   );
+}
+
+{
+  /*<div className="flex justify-center pt-8 items-center flex-col gap-6">
+  <div>Generate Mnemonic</div>
+  <div>
+    {mnemonic_seed_phrase}
+  </div>
+  <div>Connected: {connection ? "true" : "false"}</div>
+  <Button
+    onClick={handleGenerateRootKeypair}
+  >
+    Lets do it!
+  </Button>
+  <Button onClick={airdropFunder}>
+    {isAirdropping ? "Airdropping Funder..." : "Airdrop Funder!"}
+  </Button>
+  <Button onClick={inspectBalances}>
+    {retriving_account_infos
+      ? "retriving_account_infos..."
+      : "retrive_account_infos! "}
+  </Button>
+  <pre>{JSON.stringify(account_infos, null, 2)}</pre>
+  <Button onClick={createMints}>
+    {is_creating_mints ? "creating mints..." : "createMints"}
+  </Button>
+  <Button onClick={generate_supply_for_pool_authority}>
+    {is_generating_supply_for_pool_authority
+      ? "generating supply for pool authority..."
+      : "generate supply!"}
+  </Button>
+  <Button onClick={init_pool}>
+    {initializing_pool ? "initialize pool..." : "init pool"}
+  </Button>
+  <Button onClick={adding_liquidity}>
+    {is_adding_liquidty ? "adding liquidity..." : "add liquidity"}
+  </Button>{" "}
+  <Button onClick={mint_for_users}>
+    {is_minting_for_users ? "mint users..." : "mint users"}
+  </Button>
+  <Button onClick={swapAtoB}>{is_swapping ? "swapping..." : "swap"}</Button>
+</div>*/
 }
