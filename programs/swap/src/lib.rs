@@ -5,7 +5,7 @@ use anchor_spl::{
 };
 use anchor_spl::{token_2022::TransferChecked, token_interface};
 
-declare_id!("48hQo5DcqyZmTeVPpCHGwb6GAzxnSo1kTGnb6UE8ewAN");
+declare_id!("75AzmcJ8rGx3pmJmeYwkCAFRxWNqJhf7EBmNBaJJP3Kr");
 
 #[program]
 pub mod swap {
@@ -188,6 +188,7 @@ pub struct SwapAB<'info> {
         mut,
         associated_token::authority = user,
         associated_token::mint = token_a_mint,
+        associated_token::token_program = token_program,
     )]
     pub user_a_ata: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(
@@ -195,6 +196,7 @@ pub struct SwapAB<'info> {
         payer = user,
         associated_token::authority = user,
         associated_token::mint = token_b_mint,
+        associated_token::token_program = token_program,
     )]
     pub user_b_ata: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(
