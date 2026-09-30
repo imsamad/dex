@@ -1,3 +1,13 @@
+//! A constant-product (x · y = k) AMM for one pair of tokens.
+//!
+//! The pool is two token accounts ("vaults"), one per mint. Each vault is a
+//! PDA that is also its own authority, so only this program can move tokens
+//! out of it, by signing with the vault's seeds.
+//!
+//! Instructions: `init_pool` creates the vaults, `add_liquidity` deposits into
+//! them, `swap_a_b` trades A for B. Uses `token_interface`, so both classic SPL
+//! Token and Token-2022 mints work.
+
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
@@ -12,11 +22,17 @@ pub mod swap {
 
     use super::*;
 
+    /// Creates the two vaults. All the work happens in the `InitPool` account
+    /// constraints, so the body is empty.
     pub fn init_pool(_ctx: Context<InitPool>) -> Result<()> {
         Ok(())
     }
 
+    /// Moves `amount_a` and `amount_b` from the owner into the vaults.
+    /// No LP tokens and no ratio check yet (see the README to-do list).
     pub fn add_liquidity(ctx: Context<AddLiquidity>, amount_a: u64, amount_b: u64) -> Result<()> {
+        // transfer_checked (rather than transfer) also verifies the mint and
+        // decimals, and is required for Token-2022 mints.
         let ctx_account = TransferChecked {
             from: ctx.accounts.owner_a_ata.to_account_info(),
             to: ctx.accounts.token_a_vault.to_account_info(),
@@ -41,15 +57,21 @@ pub mod swap {
         Ok(())
     }
 
+    /// Sells `amount_in` of A for B. Fails if the output would be less than
+    /// `min_amount_out`, which protects the trader from the price moving.
     pub fn swap_a_b(ctx: Context<SwapAB>, amount_in: u64, min_amount_out: u64) -> Result<()> {
+        // The reserves are simply the vault balances.
         let reserve_a = ctx.accounts.token_a_vault.amount;
         let reserve_b = ctx.accounts.token_b_vault.amount;
-        // amout_out = res_a * am_in / res-b + am_in
 
         require!(reserve_a > 0, SwapError::InvalidAmount);
         require!(reserve_b > 0, SwapError::InvalidAmount);
         require!(amount_in > 0, SwapError::InvalidAmount);
 
+        // Keeping x · y = k constant:
+        //   amount_out = reserve_b * amount_in / (reserve_a + amount_in)
+        // Done in u128 so the multiplication can't overflow. Integer division
+        // rounds down, in the pool's favour.
         let amount_out = (reserve_b as u128)
             .checked_mul(amount_in as u128)
             .ok_or(SwapError::MathOverflow)?
@@ -60,12 +82,15 @@ pub mod swap {
             )
             .ok_or(SwapError::MathOverflow)?;
 
+        // Safe cast: the result is always less than reserve_b, which is a u64.
         let amount_out = amount_out as u64;
 
         require!(amount_out >= min_amount_out, SwapError::SlippageExceeded);
 
         require!(amount_out < reserve_b, SwapError::InsufficientLiquidity);
 
+        // 1. The trader pays A into the pool. The trader signed the transaction,
+        //    so a plain CpiContext is enough.
         let ctx_account = TransferChecked {
             from: ctx.accounts.user_a_ata.to_account_info(),
             to: ctx.accounts.token_a_vault.to_account_info(),
@@ -77,6 +102,8 @@ pub mod swap {
 
         token_interface::transfer_checked(cpi_ixn, amount_in, ctx.accounts.token_a_mint.decimals)?;
 
+        // 2. The pool pays B out. The vault is its own authority and has no
+        //    private key, so the program signs for it with the vault's seeds.
         let ctx_account = TransferChecked {
             from: ctx.accounts.token_b_vault.to_account_info(),
             to: ctx.accounts.user_b_ata.to_account_info(),
@@ -101,6 +128,10 @@ pub mod swap {
     }
 }
 
+// Account structs: Anchor checks every constraint below before the instruction
+// body runs. Token accounts are boxed (moved to the heap) because unboxed they
+// overflow the 4 KB stack frame in the generated `try_accounts`.
+
 #[derive(Accounts)]
 pub struct InitPool<'info> {
     #[account(mut)]
@@ -109,6 +140,9 @@ pub struct InitPool<'info> {
     pub token_a_mint: InterfaceAccount<'info, Mint>,
     pub token_b_mint: InterfaceAccount<'info, Mint>,
 
+    // A PDA token account that owns itself. Seeded by the mint only, so every
+    // pool that uses this mint would share the vault (README to-do: add a Pool
+    // account seeded by both mints).
     #[account(
         init_if_needed,
         payer = owner,
@@ -137,6 +171,8 @@ pub struct InitPool<'info> {
 
 #[derive(Accounts)]
 pub struct AddLiquidity<'info> {
+    // The seeds + bump constraints below make Anchor check that the vaults
+    // passed in really are this program's PDAs for these mints.
     pub owner: Signer<'info>,
 
     pub token_a_mint: InterfaceAccount<'info, Mint>,
@@ -179,6 +215,9 @@ pub struct AddLiquidity<'info> {
 
 #[derive(Accounts)]
 pub struct SwapAB<'info> {
+    // `associated_token::token_program` matters: the ATA address depends on the
+    // token program, and without it Anchor assumes classic SPL Token, so
+    // Token-2022 ATAs fail with ConstraintAssociated.
     #[account(mut)]
     pub user: Signer<'info>,
 
@@ -191,6 +230,7 @@ pub struct SwapAB<'info> {
         associated_token::token_program = token_program,
     )]
     pub user_a_ata: Box<InterfaceAccount<'info, TokenAccount>>,
+    // Created on the fly if the trader has never held B, paid by the trader.
     #[account(
         init_if_needed,
         payer = user,

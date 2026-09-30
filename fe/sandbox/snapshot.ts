@@ -1,3 +1,7 @@
+// A snapshot is every balance the UI shows, read in one RPC call. The store
+// takes one before and one after each action; diffSnapshots() then gives the
+// "what changed" entry in the transaction log.
+
 import { PublicKey } from "@solana/web3.js";
 import {
   ExtensionType,
@@ -52,6 +56,8 @@ export async function takeSnapshot(ctx: StepContext): Promise<Snapshot> {
   const vaultA = vaultAddress(ctx.programId, mints.a.publicKey);
   const vaultB = vaultAddress(ctx.programId, mints.b.publicKey);
 
+  // One flat list, so everything comes back in a single getMultipleAccountsInfo
+  // call. The index math below relies on this order.
   const addresses: PublicKey[] = [
     ...owners,
     ...owners.map((o) => ataAddress(mints.a.publicKey, o)),
@@ -63,6 +69,8 @@ export async function takeSnapshot(ctx: StepContext): Promise<Snapshot> {
   ];
   const infos = await ctx.connection.getMultipleAccountsInfo(addresses);
 
+  // A missing or unreadable token account counts as null (callers decide
+  // whether that means "0" or "doesn't exist yet").
   const tokenAmount = (i: number): bigint | null => {
     const info = infos[i];
     if (!info) return null;
@@ -78,6 +86,8 @@ export async function takeSnapshot(ctx: StepContext): Promise<Snapshot> {
     if (!info) return null;
     try {
       const mint = unpackMint(addresses[i], info, TOKEN_PROGRAM);
+      // Token-2022 stores extensions after the base mint data as TLV
+      // (type, length, value) entries; pick out the metadata one.
       const data = getExtensionData(ExtensionType.TokenMetadata, mint.tlvData);
       const metadata = data ? unpackMetadata(data) : undefined;
       return {
@@ -108,6 +118,7 @@ export async function takeSnapshot(ctx: StepContext): Promise<Snapshot> {
   };
 }
 
+// Keeps only the actors whose balances changed.
 export function diffSnapshots(before: Snapshot, after: Snapshot): Diff {
   const zero = BigInt(0);
   const actors = ACTORS.map((actor) => ({

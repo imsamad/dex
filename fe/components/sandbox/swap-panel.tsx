@@ -1,5 +1,9 @@
 "use client";
 
+// Free-form swap: any actor, any amount, any slippage. The quote is recomputed
+// on every render from the pool reserves in the snapshot, so nothing is fetched
+// while typing.
+
 import { useState } from "react";
 import { Button } from "@/components/button";
 import { TokenBadge } from "@/components/sandbox/token-badge";
@@ -11,6 +15,7 @@ import { TOKENS } from "@/sandbox/tokens";
 import { formatUnits, parseUnits } from "@/sandbox/format";
 
 const SLIPPAGE_OPTIONS = [10, 50, 100, 500]; // bps
+// The faucet is excluded: its only job is funding the other actors.
 const TRADERS = ACTORS.filter((id) => id !== "funder");
 const A = TOKENS.a.symbol;
 const B = TOKENS.b.symbol;
@@ -30,6 +35,10 @@ export const SwapPanel = () => {
 
   const quote = poolReady && amountIn ? quoteOut(reserveA, reserveB, amountIn) : null;
   const minOut = quote !== null ? withSlippage(quote, slippageBps) : null;
+  // Spot price: what an infinitely small trade would get. Execution price: what
+  // this trade gets on average. Price impact is how much worse the second is,
+  // and it grows with the trade's size relative to the reserves.
+  // (Number is fine here: these are only for display.)
   const spotPrice = poolReady ? Number(reserveB) / Number(reserveA) : null;
   const executionPrice = quote !== null && amountIn ? Number(quote) / Number(amountIn) : null;
   const priceImpact =

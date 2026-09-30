@@ -1,3 +1,12 @@
+// Every on-chain action the sandbox performs, as plain async functions.
+//
+// Each one takes a StepContext (connection, keypairs, program client), sends
+// one or more transactions and returns their signatures. None of them know
+// about React: store.tsx calls them and records what changed.
+//
+// Start with STEPS at the bottom of the file, which lists the guided flow in
+// order, then jump to the function each step runs.
+
 import {
   PublicKey,
   sendAndConfirmTransaction,
@@ -58,9 +67,14 @@ export type Step = {
   isDone: (s: Snapshot) => boolean;
 };
 
+// Anchor expects u64 arguments as BN; the sandbox uses bigint everywhere else.
 const bn = (v: bigint) => new BN(v.toString());
+// Whole tokens → base units (e.g. 10 → 10_000_000 with 6 decimals)
 const units = (tokens: number) => toBaseUnits(tokens, DECIMALS);
 
+// Tops every actor up to LAMPORTS_PER_ACTOR. Devnet rate-limits airdrops, so
+// only the faucet gets an airdrop and it pays everyone else in one transaction.
+// Safe to re-run: actors that already have enough SOL are skipped.
 async function fund({ connection, sandbox }: StepContext) {
   const { funder } = sandbox.actors;
   const recipients = ACTORS.filter((id) => id !== "funder").map(
@@ -104,7 +118,8 @@ async function fund({ connection, sandbox }: StepContext) {
   return signatures;
 }
 
-// Token-2022 mint with the metadata stored on the mint account itself.
+// Token-2022 mint with the metadata stored on the mint account itself,
+// so no separate Metaplex metadata account is needed.
 async function createMint(ctx: StepContext, which: "a" | "b") {
   const { connection, sandbox } = ctx;
   const mint = sandbox.mints[which];
@@ -128,7 +143,10 @@ async function createMint(ctx: StepContext, which: "a" | "b") {
     mintLen + metadataLen,
   );
 
+  // The order matters: extensions (MetadataPointer) must be initialised before
+  // the mint, and the metadata can only be written once the mint exists.
   const tx = new Transaction().add(
+    // 1. Allocate the account and hand it to the Token-2022 program
     SystemProgram.createAccount({
       fromPubkey: issuer.publicKey,
       newAccountPubkey: mint.publicKey,
@@ -136,12 +154,14 @@ async function createMint(ctx: StepContext, which: "a" | "b") {
       lamports,
       programId: TOKEN_PROGRAM,
     }),
+    // 2. Say "this mint's metadata lives at <address>", which is the mint itself
     createInitializeMetadataPointerInstruction(
       mint.publicKey,
       issuer.publicKey,
       mint.publicKey,
       TOKEN_PROGRAM,
     ),
+    // 3. The mint itself; the issuer is both mint and freeze authority
     createInitializeMintInstruction(
       mint.publicKey,
       DECIMALS,
@@ -149,6 +169,7 @@ async function createMint(ctx: StepContext, which: "a" | "b") {
       issuer.publicKey,
       TOKEN_PROGRAM,
     ),
+    // 4. Write name, symbol and uri (the uri points to a JSON with the logo)
     createInitializeInstruction({
       programId: TOKEN_PROGRAM,
       metadata: mint.publicKey,
@@ -159,6 +180,7 @@ async function createMint(ctx: StepContext, which: "a" | "b") {
       symbol: token.symbol,
       uri: token.uri,
     }),
+    // 5. Custom key/value fields go in separately
     createUpdateFieldInstruction({
       programId: TOKEN_PROGRAM,
       metadata: mint.publicKey,
@@ -167,10 +189,13 @@ async function createMint(ctx: StepContext, which: "a" | "b") {
       value: token.description,
     }),
   );
+  // The mint keypair signs too: creating an account at an address requires
+  // that address's signature.
   return [await sendAndConfirmTransaction(connection, tx, [issuer, mint])];
 }
 
 // Each issuer creates the recipients' ATAs and mints to them in one tx.
+// The two issuers are independent, so their transactions go out in parallel.
 async function mintSupply({ connection, sandbox }: StepContext) {
   const { actors, mints } = sandbox;
   const plans: {
@@ -204,6 +229,8 @@ async function mintSupply({ connection, sandbox }: StepContext) {
         const owner = actors[actor].publicKey;
         const ata = ataAddress(mint, owner);
         tx.add(
+          // "Idempotent": creates the ATA if missing, does nothing otherwise,
+          // so a failed step can simply be retried.
           createAssociatedTokenAccountIdempotentInstruction(
             authority.publicKey,
             ata,
@@ -227,6 +254,9 @@ async function mintSupply({ connection, sandbox }: StepContext) {
   );
 }
 
+// For the program calls below, Anchor works out the PDA accounts (vaults, ATAs)
+// from the seeds in the IDL, so only the accounts it can't derive are passed.
+
 async function initPool({ sandbox, programFor }: StepContext) {
   const creator = sandbox.actors.pool_creator;
   const sig = await programFor(creator)
@@ -241,6 +271,8 @@ async function initPool({ sandbox, programFor }: StepContext) {
   return [sig];
 }
 
+// The program doesn't check the deposit ratio yet, so any amounts are
+// accepted (see the contract to-do list in the README).
 async function addLiquidity({ sandbox, programFor }: StepContext) {
   const lp = sandbox.actors.lp;
   const { a, b } = sandbox.mints;
@@ -260,6 +292,7 @@ async function addLiquidity({ sandbox, programFor }: StepContext) {
 
 export type SwapParams = { trader: ActorId; amountIn: bigint; minOut: bigint };
 
+// The pool's reserves are simply the token balances of its two vaults.
 export async function getReserves({ connection, sandbox, programId }: StepContext) {
   const { a, b } = sandbox.mints;
   const [vaultA, vaultB] = await Promise.all([
@@ -269,6 +302,9 @@ export async function getReserves({ connection, sandbox, programId }: StepContex
   return { a: BigInt(vaultA.value.amount), b: BigInt(vaultB.value.amount) };
 }
 
+// Used by the guided step and by the swap panel. If the output would be less
+// than minOut, the program rejects the swap (SlippageExceeded). The trader's
+// LUM account is created by the program if missing, paid by the trader.
 export async function swapAToB(
   { sandbox, programFor }: StepContext,
   { trader, amountIn, minOut }: SwapParams,
@@ -296,6 +332,10 @@ async function guidedSwap(ctx: StepContext) {
 
 const zero = BigInt(0);
 
+// The guided flow, in order. isDone() checks the chain, not local state, so
+// progress survives a refresh. Each check picks a balance that later steps
+// don't undo: e.g. "mint supply" looks at Tara's LUM, because the LP
+// deposits everything it was minted.
 export const STEPS: Step[] = [
   {
     id: "fund",

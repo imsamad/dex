@@ -1,3 +1,6 @@
+// The glue between the sandbox keypairs and the Anchor client, plus the
+// address helpers that steps and the snapshot share.
+
 import { AnchorProvider, Program, type Idl } from "@anchor-lang/core";
 import {
   Connection,
@@ -19,6 +22,8 @@ export type StepContext = {
   programFor: (signer: Keypair) => Program<Swap>;
 };
 
+// Anchor expects a wallet (like Phantom) that can sign transactions. In the
+// sandbox the "wallet" is just a keypair we hold, so this signs in memory.
 const keypairWallet = (kp: Keypair) => ({
   publicKey: kp.publicKey,
   async signTransaction<T extends Transaction | VersionedTransaction>(tx: T) {
@@ -54,11 +59,15 @@ export function makeStepContext(
   };
 }
 
+// The pool vault for a mint: a PDA with the same seeds as the program uses in
+// lib.rs. Keep the two in sync.
 export const vaultAddress = (programId: PublicKey, mint: PublicKey) =>
   PublicKey.findProgramAddressSync(
     [Buffer.from("samad-dex-vault"), mint.toBuffer()],
     programId,
   )[0];
 
+// An owner's associated token account. The token program is part of the
+// derivation, so a Token-2022 mint's ATA differs from a classic mint's.
 export const ataAddress = (mint: PublicKey, owner: PublicKey) =>
   getAssociatedTokenAddressSync(mint, owner, false, TOKEN_PROGRAM);

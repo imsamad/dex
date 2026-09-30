@@ -1,5 +1,7 @@
 "use client";
 
+// Sandbox status, the seed phrase reveal and the reset button.
+
 import { useState } from "react";
 import { Button } from "@/components/button";
 import { useSandbox } from "@/sandbox/store";

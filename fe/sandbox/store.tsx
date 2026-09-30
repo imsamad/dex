@@ -1,5 +1,18 @@
 "use client";
 
+// The sandbox store: one useReducer + context. Every component reads it
+// through useSandbox().
+//
+// Data flow:
+//   mount   → load (or create) the mnemonic → derive all keypairs  ("loaded")
+//           → takeSnapshot() reads every balance from the chain     ("synced")
+//   a click → execute(): snapshot before → run the step's transactions
+//           → snapshot after → log entry with the diff             ("finished")
+//           → store the new snapshot                               ("synced")
+//
+// This is the only sandbox file that knows about React. The Solana logic is
+// plain async functions in steps.ts and snapshot.ts.
+
 import {
   createContext,
   useCallback,
@@ -34,16 +47,19 @@ export type TxRecord = {
 };
 
 type State = {
-  sandbox?: Sandbox;
-  snapshot?: Snapshot;
+  sandbox?: Sandbox; // keypairs derived from the mnemonic; unset until mounted
+  snapshot?: Snapshot; // latest balances read from the chain
   steps: Record<StepId, StepStatus>;
   log: TxRecord[]; // newest first
 };
 
 type Action =
+  // a sandbox was derived: first load or after a reset
   | { type: "loaded"; sandbox: Sandbox }
+  // fresh balances were read from the chain
   | { type: "synced"; snapshot: Snapshot }
   | { type: "step_started"; step: StepId }
+  // any action (a step or a custom swap) completed, successfully or not
   | { type: "finished"; record: TxRecord };
 
 const idleSteps = () =>
@@ -82,6 +98,8 @@ function reducer(state: State, action: Action): State {
   }
 }
 
+// localStorage can throw (private mode, blocked storage), so reads and writes
+// are wrapped. Without it the sandbox still works, it just won't survive a refresh.
 function loadOrCreateMnemonic(): string {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -105,11 +123,14 @@ type SandboxValue = State & {
 
 const SandboxCtx = createContext<SandboxValue | null>(null);
 
+// Only used as a React key for log entries, so a module-level counter is enough.
 let nextRecordId = 1;
 
 export function SandboxProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const connection = useMemo(() => new Connection(RPC_URL, "confirmed"), []);
+  // Everything a step needs (connection, keypairs, program client) in one
+  // object. Rebuilt only when the sandbox changes, i.e. on load or reset.
   const ctx = useMemo(
     () => state.sandbox && makeStepContext(connection, state.sandbox, idl as Idl),
     [connection, state.sandbox],
@@ -125,11 +146,15 @@ export function SandboxProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "synced", snapshot: await takeSnapshot(ctx) });
   }, [ctx]);
 
+  // Reads balances whenever ctx changes (first load, reset). Steps found done on
+  // chain are marked done, which is how progress survives a page refresh.
   useEffect(() => {
     refresh().catch((err) => console.error("sandbox refresh failed", err));
   }, [refresh]);
 
-  // Runs one action, and logs its signatures, error and balance diff.
+  // Runs one action and logs its signatures, error and balance diff.
+  // Steps and custom swaps both go through here, so both get a log entry.
+  // Errors are recorded, not thrown: the caller only gets true or false.
   const execute = useCallback(
     async (
       meta: Pick<TxRecord, "title" | "signers" | "step">,
@@ -173,6 +198,8 @@ export function SandboxProvider({ children }: { children: ReactNode }) {
   );
 
   // Runs every step that is not done yet, in order, and stops at the first failure.
+  // "Done" comes from a fresh snapshot, not from state, because state inside
+  // this callback would be stale while the loop runs.
   const runAll = useCallback(async () => {
     if (!ctx) return;
     const snapshot = await takeSnapshot(ctx);
@@ -182,6 +209,8 @@ export function SandboxProvider({ children }: { children: ReactNode }) {
     }
   }, [ctx, runStep]);
 
+  // Forgets the mnemonic and derives a brand new sandbox. The old accounts
+  // still exist on chain; they just aren't used anymore.
   const reset = useCallback(() => {
     try {
       localStorage.removeItem(STORAGE_KEY);

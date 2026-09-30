@@ -1,3 +1,10 @@
+// Turns one mnemonic into every keypair the sandbox uses: one per actor
+// (role in the protocol) plus the two mint accounts.
+//
+// Keys are never stored, only the mnemonic. Deriving is deterministic, so the
+// same mnemonic always gives the same addresses, and a refresh finds the same
+// accounts on chain.
+
 import { mnemonicToSeedSync } from "bip39";
 import { derivePath } from "ed25519-hd-key";
 import { Keypair } from "@solana/web3.js";
@@ -33,8 +40,11 @@ export type Sandbox = {
   mints: { a: Keypair; b: Keypair };
 };
 
+// The path Phantom and Solflare use, so the mnemonic can be imported into a
+// real wallet to look at the sandbox accounts there.
 export const derivationPath = (index: number) => `m/44'/501'/${index}'/0'`;
 
+// derivePath gives a 32-byte ed25519 seed; Keypair.fromSeed expands it to a keypair.
 const deriveKeypair = (seedHex: string, index: number) =>
   Keypair.fromSeed(derivePath(derivationPath(index), seedHex).key);
 

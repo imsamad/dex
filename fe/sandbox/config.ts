@@ -1,3 +1,6 @@
+// Every tunable number of the sandbox in one place: network, token settings
+// and the amounts the guided steps use.
+
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
 
@@ -7,6 +10,8 @@ export const RPC_URL =
 // localStorage key for the sandbox mnemonic
 export const STORAGE_KEY = "samdex:mnemonic";
 
+// Both mints use Token-2022 so they can carry on-chain metadata. The swap
+// program accepts either token program through Anchor's token_interface.
 export const TOKEN_PROGRAM = TOKEN_2022_PROGRAM_ID;
 export const DECIMALS = 6;
 
@@ -21,6 +26,7 @@ export const LP_DEPOSIT = 1000;
 export const SWAP_AMOUNT = 10;
 export const SLIPPAGE_BPS = 100; // 1%
 
+// Solana Explorer can show a local validator too ("custom" cluster).
 export const explorerUrl = (kind: "tx" | "address", id: string) => {
   const cluster = RPC_URL.includes("devnet")
     ? "cluster=devnet"

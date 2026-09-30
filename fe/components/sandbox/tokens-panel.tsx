@@ -1,5 +1,8 @@
 "use client";
 
+// One card per token. Name, symbol, description, supply and mint authority are
+// read from the mint account on chain; only the logo comes from sandbox/tokens.ts.
+
 import Image from "next/image";
 import { useSandbox } from "@/sandbox/store";
 import { TOKENS } from "@/sandbox/tokens";

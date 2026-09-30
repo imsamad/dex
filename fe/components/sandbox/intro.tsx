@@ -1,3 +1,5 @@
+// The explanation at the top of the page, for someone seeing the project for the first time.
+
 import { TokenBadge } from "@/components/sandbox/token-badge";
 
 export const Intro = () => (

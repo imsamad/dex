@@ -15,6 +15,10 @@ export type Swap = {
   "instructions": [
     {
       "name": "addLiquidity",
+      "docs": [
+        "Moves `amount_a` and `amount_b` from the owner into the vaults.",
+        "No LP tokens and no ratio check yet (see the README to-do list)."
+      ],
       "discriminator": [
         181,
         157,
@@ -125,6 +129,10 @@ export type Swap = {
     },
     {
       "name": "initPool",
+      "docs": [
+        "Creates the two vaults. All the work happens in the `InitPool` account",
+        "constraints, so the body is empty."
+      ],
       "discriminator": [
         116,
         233,
@@ -223,6 +231,10 @@ export type Swap = {
     },
     {
       "name": "swapAB",
+      "docs": [
+        "Sells `amount_in` of A for B. Fails if the output would be less than",
+        "`min_amount_out`, which protects the trader from the price moving."
+      ],
       "discriminator": [
         17,
         45,

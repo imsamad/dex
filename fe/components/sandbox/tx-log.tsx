@@ -1,5 +1,8 @@
 "use client";
 
+// One entry per action (step or custom swap): who signed, what changed, and
+// either the transaction links or the program error with its logs.
+
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { useSandbox, type TxRecord } from "@/sandbox/store";
 import { ACTOR_LABELS } from "@/sandbox/keys";

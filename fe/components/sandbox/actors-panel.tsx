@@ -1,5 +1,8 @@
 "use client";
 
+// Every actor's SOL and token balances, and the pool's reserves. All numbers
+// come from the latest snapshot in the store, which refreshes after each action.
+
 import { useState } from "react";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { Button } from "@/components/button";
@@ -103,6 +106,7 @@ export const ActorsPanel = () => {
             {formatUnits(pool.b, DECIMALS)} {TOKENS.b.symbol}
             {hasReserves && (
               <>
+                {/* k is a product of two base-unit amounts, so it has 2 × DECIMALS */}
                 {" · "}k = {formatUnits(pool.a! * pool.b!, 2 * DECIMALS, 0)}
                 {" · "}1 {TOKENS.a.symbol} = {(Number(pool.b) / Number(pool.a)).toFixed(4)}{" "}
                 {TOKENS.b.symbol}

@@ -1,5 +1,7 @@
 "use client";
 
+// The guided flow: one row per entry in STEPS (sandbox/steps.ts), plus "Run all".
+
 import { useState } from "react";
 import { Button } from "@/components/button";
 import { useSandbox, type StepStatus } from "@/sandbox/store";
@@ -39,6 +41,7 @@ export const StepsPanel = () => {
       <ol className="flex flex-col gap-2">
         {STEPS.map((step, i) => {
           const status = steps[step.id];
+          // Steps unlock in order: each needs the previous one done on chain.
           const unlocked = i === 0 || steps[STEPS[i - 1].id] === "done";
           return (
             <li key={step.id} className="flex items-start gap-3 border rounded-md p-2">

@@ -1,3 +1,6 @@
+// Logo + symbol, used wherever a token is named. A server component: it only
+// imports sandbox/tokens.ts, which has no Solana dependencies.
+
 import Image from "next/image";
 import { TOKENS } from "@/sandbox/tokens";
 
